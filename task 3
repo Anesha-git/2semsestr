@@ -1,0 +1,81 @@
+#include <iostream>
+#include <string>
+#include <vector>
+
+class Date {
+    int days;
+public:
+    Date() : days(0) {}
+    int daysSince(const Date&) const { return 30; }
+};
+
+class Account {
+protected:
+    std::string accountNumber;
+    double balance;
+    Date creationDate;
+public:
+    Account(const std::string& num) : accountNumber(num), balance(0) {}
+    virtual bool deposit(double amount) {
+        if (amount <= 0) return false;
+        balance += amount;
+        return true;
+    }
+    virtual bool withdraw(double amount) {
+        if (amount > balance) return false;
+        balance -= amount;
+        return true;
+    }
+    virtual double getBalance() { return balance; }
+    virtual ~Account() {}
+};
+
+class SavingsAccount : public Account {
+    double rate;
+public:
+    SavingsAccount(const std::string& num, double r) : Account(num), rate(r) {}
+    void addInterest() { balance += balance * rate; }
+};
+
+class CheckingAccount : public Account {
+public:
+    CheckingAccount(const std::string& num) : Account(num) {}
+    bool withdraw(double amount) override {
+        double commission = amount * 0.02;
+        if (amount + commission > balance) return false;
+        balance -= (amount + commission);
+        return true;
+    }
+};
+
+class CreditAccount : public Account {
+    double limit, debt;
+public:
+    CreditAccount(const std::string& num, double l) : Account(num), limit(l), debt(0) {}
+    bool withdraw(double amount) override {
+        if (balance + limit - debt < amount) return false;
+        if (amount <= balance) balance -= amount;
+        else { debt += amount - balance; balance = 0; }
+        return true;
+    }
+};
+
+class AccountManager {
+    std::vector<Account*> accounts;
+public:
+    void addAccount(Account* a) { accounts.push_back(a); }
+    void showBalances() {
+        for (size_t i = 0; i < accounts.size(); i++)
+            std::cout << "Account " << i << ": " << accounts[i]->getBalance() << std::endl;
+    }
+    ~AccountManager() { for (auto a : accounts) delete a; }
+};
+
+int main() {
+    AccountManager m;
+    m.addAccount(new SavingsAccount("S1", 0.05));
+    m.addAccount(new CheckingAccount("C1"));
+    m.addAccount(new CreditAccount("CR1", 1000));
+    m.showBalances();
+    return 0;
+}
