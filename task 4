@@ -1,0 +1,97 @@
+#include <iostream>
+#include <string>
+#include <map>
+
+class Request {
+public:
+    std::string type, user, data;
+    int id;
+    Request(std::string t, std::string u, std::string d, int i) 
+        : type(t), user(u), data(d), id(i) {}
+};
+
+class Response {
+public:
+    std::string result;
+    int code;
+    Response(std::string r, int c) : result(r), code(c) {}
+};
+
+class RequestHandler {
+public:
+    virtual bool handleRequest(const Request& req) = 0;
+    virtual Response process(const Request& req) = 0;
+    virtual bool isAuthorized(const Request& req) const = 0;
+};
+
+class AuthSystem {
+    std::map<std::string, std::string> users{{"admin","admin"},{"user","user"}};
+public:
+    bool checkAuth(const std::string& user, const std::string& type) {
+        return user == "admin" || (user == "user" && type != "delete");
+    }
+};
+
+class CacheSystem {
+    std::map<int, Response> cache;
+public:
+    bool hasCache(int id) { return cache.count(id); }
+    Response getCache(int id) { return cache[id]; }
+    void addCache(int id, Response r) { cache[id] = r; }
+};
+
+class Handler : public RequestHandler {
+    AuthSystem& auth;
+    CacheSystem& cache;
+    std::string allowedType;
+public:
+    Handler(AuthSystem& a, CacheSystem& c, std::string t) : auth(a), cache(c), allowedType(t) {}
+    
+    bool isAuthorized(const Request& req) const override {
+        return auth.checkAuth(req.user, req.type);
+    }
+    
+    bool handleRequest(const Request& req) override {
+        return isAuthorized(req) && req.type == allowedType;
+    }
+    
+    Response process(const Request& req) override {
+        if (allowedType == "GET" && cache.hasCache(req.id)) 
+            return cache.getCache(req.id);
+        Response resp(allowedType + ":" + req.data, 200);
+        if (allowedType == "GET") cache.addCache(req.id, resp);
+        return resp;
+    }
+};
+
+int main() {
+    AuthSystem auth;
+    CacheSystem cache;
+    Handler* handlers[3] = {
+        new Handler(auth, cache, "GET"),
+        new Handler(auth, cache, "POST"),
+        new Handler(auth, cache, "DELETE")
+    };
+    
+    Request reqs[3] = {
+        Request("GET", "user", "data1", 1),
+        Request("POST", "user", "data2", 2),
+        Request("DELETE", "admin", "data3", 3)
+    };
+    
+    for (int i = 0; i < 3; i++) {
+        bool handled = false;
+        for (int j = 0; j < 3; j++) {
+            if (handlers[j]->handleRequest(reqs[i])) {
+                Response r = handlers[j]->process(reqs[i]);
+                std::cout << r.result << std::endl;
+                handled = true;
+                break;
+            }
+        }
+        if (!handled) std::cout << "DENIED" << std::endl;
+    }
+    
+    for (int i = 0; i < 3; i++) delete handlers[i];
+    return 0;
+}
